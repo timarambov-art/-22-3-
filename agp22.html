@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>АГП-22 — 3D-демо автовышки</title>
+<style>
+  :root {
+    --bg: #0a0d12;
+    --fg: #f5f5f7;
+    --muted: #8b8b94;
+    --accent: #fbbf24;
+    --accent2: #f59e0b;
+    --line: rgba(255,255,255,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+  #three-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; }
+
+  .progress { position: fixed; top: 0; left: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    z-index: 20; width: 0; transition: width 0.1s linear;
+    box-shadow: 0 0 20px var(--accent); }
+
+  nav { position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 40px; z-index: 15;
+    backdrop-filter: blur(16px); background: rgba(10,13,18,0.5);
+    border-bottom: 1px solid var(--line); }
+  nav .logo { font-weight: 700; letter-spacing: 0.08em; font-size: 15px; text-transform: uppercase; }
+  nav .logo span { color: var(--accent); }
+  nav .right { display: flex; gap: 24px; align-items: center; font-size: 13px; color: var(--muted); }
+
+  section { position: relative; z-index: 2; min-height: 100vh;
+    display: flex; align-items: center; padding: 100px 60px; }
+  .inner { max-width: 1400px; margin: 0 auto; width: 100%; }
+
+  .chapter-tag { font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+  .chapter-tag::before { content: ''; width: 24px; height: 1px; background: var(--accent); }
+
+  h1 { font-size: clamp(44px, 7vw, 110px); font-weight: 700;
+    letter-spacing: -0.04em; line-height: 0.9; margin-bottom: 24px; }
+  h1 em { font-style: normal; color: var(--accent); }
+  h2 { font-size: clamp(32px, 5vw, 64px); font-weight: 700;
+    letter-spacing: -0.03em; line-height: 0.95; margin-bottom: 20px; }
+  h2 em { font-style: normal; color: var(--accent); }
+  p.lead { font-size: 18px; color: var(--muted); line-height: 1.5; max-width: 440px; margin-bottom: 36px; }
+
+  /* HERO */
+  .hero-text { max-width: 600px; }
+  .hero-meta { display: flex; gap: 40px; margin-top: 48px; padding-top: 32px;
+    border-top: 1px solid var(--line); }
+  .hero-meta .m { font-size: 12px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .hero-meta .m strong { display: block; font-size: 22px; color: var(--fg);
+    letter-spacing: -0.01em; text-transform: none; margin-top: 6px; font-weight: 600; }
+
+  /* Right-align */
+  .right-align { justify-content: flex-end; }
+  .right-align .text { max-width: 420px; text-align: right; }
+  .right-align .text p.lead { margin-left: auto; }
+  .right-align .chapter-tag { justify-content: flex-end; }
+  .right-align .chapter-tag::before { display:none; }
+  .right-align .chapter-tag::after { content: ''; width: 24px; height: 1px; background: var(--accent); margin-left: 10px; }
+
+  /* Bottom */
+  .bottom { align-items: flex-end; padding-bottom: 100px; }
+  .bottom .text { max-width: 440px; }
+
+  /* Specs */
+  .specs-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 20px;
+    overflow: hidden; max-width: 420px; }
+  .spec { padding: 24px; background: rgba(10,13,18,0.6); backdrop-filter: blur(8px); }
+  .spec .val { font-size: 36px; font-weight: 700; color: var(--accent);
+    letter-spacing: -0.02em; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .spec .unit { font-size: 14px; color: var(--muted); letter-spacing: 0.05em; }
+
+  /* CTA */
+  .btn { padding: 16px 28px; border-radius: 999px; font-size: 15px;
+    font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 10px;
+    transition: transform .2s, box-shadow .2s; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { background: var(--accent); color: #0a0d12;
+    box-shadow: 0 10px 40px rgba(251,191,36,0.25); }
+  .btn-primary:hover { box-shadow: 0 15px 50px rgba(251,191,36,0.5); }
+  .btn-ghost { color: var(--fg); border: 1px solid var(--line);
+    background: rgba(255,255,255,0.02); backdrop-filter: blur(8px); }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .scroll-hint { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: var(--muted); letter-spacing: 0.3em; text-transform: uppercase;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    animation: bob 2.5s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translate(-50%, 8px); } }
+  .scroll-hint::after { content:''; width: 1px; height: 36px;
+    background: linear-gradient(to bottom, var(--muted), transparent); }
+
+  /* Chapter indicator */
+  .chapters-nav { position: fixed; right: 32px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 14px; z-index: 10; }
+  .chapters-nav .dot { width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); transition: all .3s; cursor: pointer; }
+  .chapters-nav .dot.active { background: var(--accent);
+    box-shadow: 0 0 20px var(--accent); transform: scale(1.4); }
+
+  footer { position: relative; z-index: 2; padding: 40px 60px;
+    border-top: 1px solid var(--line); color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between;
+    backdrop-filter: blur(12px); background: rgba(10,13,18,0.6); }
+
+  @media (max-width: 900px) {
+    nav { padding: 14px 20px; }
+    nav .right { display: none; }
+    section { padding: 100px 20px 60px; }
+    .right-align { justify-content: flex-start; }
+    .right-align .text { text-align: left; }
+    .right-align .chapter-tag { justify-content: flex-start; }
+    .right-align .chapter-tag::before { display: inline-block; }
+    .right-align .chapter-tag::after { display: none; }
+    .right-align .text p.lead { margin-left: 0; }
+    .hero-meta { flex-wrap: wrap; gap: 20px; }
+    .chapters-nav { right: 12px; }
+    footer { flex-direction: column; gap: 12px; padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<canvas id="three-canvas"></canvas>
+
+<nav>
+  <div class="logo">АГП<span>-22</span></div>
+  <div class="right">
+    <span>Автогидроподъёмник</span>
+    <span>Шасси ЗИЛ-4331</span>
+  </div>
+</nav>
+
+<div class="chapters-nav" id="chaptersNav">
+  <div class="dot" data-i="0" title="Обзор"></div>
+  <div class="dot" data-i="1" title="Кабина"></div>
+  <div class="dot" data-i="2" title="Опоры"></div>
+  <div class="dot" data-i="3" title="Подъём"></div>
+  <div class="dot" data-i="4" title="Высота"></div>
+  <div class="dot" data-i="5" title="Контакты"></div>
+</div>
+
+<!-- 0: HERO -->
+<section>
+  <div class="inner hero-text">
+    <div class="chapter-tag">01 — Обзор</div>
+    <h1>Высота <em>22 метра</em>.<br/>Доступ куда угодно.</h1>
+    <p class="lead">Автогидроподъёмник АГП-22 на базе ЗИЛ-4331. Крыши, деревья, фасады, электросети — любая задача выше земли.</p>
+    <div class="actions">
+      <a href="#" class="btn btn-primary">Заказать смену →</a>
+      <a href="#" class="btn btn-ghost">Скачать ТТХ</a>
+    </div>
+    <div class="hero-meta">
+      <div class="m">Высота подъёма<strong>22 м</strong></div>
+      <div class="m">Грузоподъёмность<strong>300 кг</strong></div>
+      <div class="m">База<strong>ЗИЛ-4331</strong></div>
+    </div>
+  </div>
+  <div class="scroll-hint">Скролль</div>
+</section>
+
+<!-- 1: CAB -->
+<section class="right-align">
+  <div class="inner">
+    <div class="text" style="margin-left: auto;">
+      <div class="chapter-tag">02 — Кабина</div>
+      <h2>Проверенная<br/><em>рамная база</em></h2>
+      <p class="lead">Трёхосное шасси ЗИЛ-4331 с полным приводом 6×6. Проходит там, где застревают городские краны: грунт, глина, снег, стройплощадка.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2: OUTRIGGERS -->
+<section>
+  <div class="inner">
+    <div class="chapter-tag">03 — Устойчивость</div>
+    <h2><em>4 опоры</em> в землю.<br/>Нулевая раскачка.</h2>
+    <p class="lead">Гидравлические аутригеры с автоматическим выравниванием. Работа на уклоне до 5° без потери грузоподъёмности в люльке.</p>
+    <div class="specs-grid">
+      <div class="spec"><div class="val">4</div><div class="unit">точки опоры</div></div>
+      <div class="spec"><div class="val">5°</div><div class="unit">макс. уклон</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3: BOOM -->
+<section class="right-align">
+  <div class="inner">
+    <div class="text" style="margin-left: auto;">
+      <div class="chapter-tag">04 — Стрела</div>
+      <h2>Телескопическая.<br/><em>3 секции</em></h2>
+      <p class="lead">Гидропривод с плавным выдвижением. Угол подъёма 0–75°, вылет 10 м, вращение башни 360° без ограничений.</p>
+      <div class="specs-grid" style="margin-left: auto;">
+        <div class="spec"><div class="val">360°</div><div class="unit">поворот</div></div>
+        <div class="spec"><div class="val">10 м</div><div class="unit">вылет</div></div>
+        <div class="spec"><div class="val">75°</div><div class="unit">макс. угол</div></div>
+        <div class="spec"><div class="val">3</div><div class="unit">секции</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4: HEIGHT -->
+<section class="bottom">
+  <div class="inner">
+    <div class="text">
+      <div class="chapter-tag">05 — На высоте</div>
+      <h2>Люлька <em>на 22 метрах</em>.<br/>7-й этаж.</h2>
+      <p class="lead">300 кг грузоподъёмности. Это 2 человека + инструмент + материалы. Проводная связь с оператором, аварийный спуск.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5: CTA -->
+<section>
+  <div class="inner">
+    <div class="chapter-tag">06 — Заказать</div>
+    <h1>Нужна вышка?<br/><em>Звоните.</em></h1>
+    <p class="lead">Работаем по Екатеринбургу и области. Выезд, оценка, смета — бесплатно. Техника с оператором, страховка.</p>
+    <div class="actions">
+      <a href="tel:+79000000000" class="btn btn-primary">+7 (900) 000-00-00</a>
+      <a href="#" class="btn btn-ghost">Написать в WhatsApp</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div>© 2026 АГП-22 Екатеринбург. Все права защищены.</div>
+  <div>К607АК 196</div>
+</footer>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a0d12, 0.025);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(10, 4, 10);
+camera.lookAt(0, 2, 0);
+
+/* ------------- MATERIALS ------------- */
+const matYellow = new THREE.MeshStandardMaterial({ color: 0xf5c518, metalness: 0.3, roughness: 0.5 });
+const matYellowDark = new THREE.MeshStandardMaterial({ color: 0xc99a0f, metalness: 0.4, roughness: 0.6 });
+const matCab = new THREE.MeshStandardMaterial({ color: 0xd8d8d6, metalness: 0.5, roughness: 0.3 });
+const matDark = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.3, roughness: 0.7 });
+const matGlass = new THREE.MeshPhysicalMaterial({ color: 0x0a1428, metalness: 0.1, roughness: 0.05, transmission: 0.6, transparent: true, opacity: 0.8 });
+const matChrome = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.95, roughness: 0.1 });
+const matGround = new THREE.MeshStandardMaterial({ color: 0x121620, metalness: 0.1, roughness: 0.9 });
+const matWarning = new THREE.MeshStandardMaterial({ color: 0xff2d2d, emissive: 0xff2d2d, emissiveIntensity: 0.5 });
+
+/* ------------- GROUND (grid) ------------- */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), matGround);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.01;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(80, 40, 0x1f2937, 0x151a22);
+grid.position.y = 0;
+scene.add(grid);
+
+/* ------------- TRUCK (ЗИЛ-4331 + АГП-22) ------------- */
+// All dimensions roughly scaled: 1 unit ≈ 1 meter
+const truck = new THREE.Group();
+scene.add(truck);
+
+// --- Chassis frame ---
+const chassis = new THREE.Group();
+chassis.position.y = 0.55;
+truck.add(chassis);
+
+const frame = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.4, 2.3), matDark);
+chassis.add(frame);
+
+// --- Cab (кабина) ---
+const cab = new THREE.Group();
+cab.position.set(-2.4, 0.5, 0);
+chassis.add(cab);
+
+// cab main body
+const cabBody = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.6, 2.3), matCab);
+cabBody.position.y = 0.8;
+cab.add(cabBody);
+
+// cab roof slope
+const cabRoof = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.15, 2.1), matCab);
+cabRoof.position.y = 1.68;
+cab.add(cabRoof);
+
+// windshield
+const windshield = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.9, 2.05), matGlass);
+windshield.position.set(0.1, 1.1, 0);
+cab.add(windshield);
+
+// side windows
+for (const z of [-1.15, 1.15]) {
+  const w = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.7, 0.05), matGlass);
+  w.position.set(-0.2, 1.0, z);
+  cab.add(w);
+}
+
+// --- HOOD (капот) — hinges at front ---
+const hoodPivot = new THREE.Group();
+hoodPivot.position.set(-2.0, 0.6, 0);
+chassis.add(hoodPivot);
+const hood = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.7, 2.0), matCab);
+hood.position.set(-1.0, 0.35, 0);
+hoodPivot.add(hood);
+// grille
+const grille = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 1.6), matDark);
+grille.position.set(-1.95, 0.3, 0);
+hoodPivot.add(grille);
+// grille slats
+for (let i = -3; i <= 3; i++) {
+  const slat = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 1.4), matChrome);
+  slat.position.set(-1.96, 0.3 + i * 0.07, 0);
+  hoodPivot.add(slat);
+}
+// headlights
+for (const z of [-0.7, 0.7]) {
+  const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.1, 16),
+    new THREE.MeshStandardMaterial({ color: 0xfff5c0, emissive: 0xfff5c0, emissiveIntensity: 0.8 }));
+  hl.rotation.z = Math.PI / 2;
+  hl.position.set(-1.95, 0.45, z);
+  hoodPivot.add(hl);
+}
+
+// front bumper
+const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 2.3), matDark);
+bumper.position.set(-3.95, 0.1, 0);
+chassis.add(bumper);
+
+// License plate К607АК 196
+const plateCanvas = document.createElement('canvas');
+plateCanvas.width = 384; plateCanvas.height = 96;
+const pctx = plateCanvas.getContext('2d');
+pctx.fillStyle = '#f5f5f5'; pctx.fillRect(0, 0, 384, 96);
+pctx.fillStyle = '#111'; pctx.font = 'bold 56px Arial'; pctx.textBaseline = 'middle';
+pctx.fillText('К607АК', 20, 50);
+pctx.fillStyle = '#f5f5f5'; pctx.fillRect(260, 0, 124, 96);
+pctx.fillStyle = '#111'; pctx.fillRect(260, 0, 2, 96);
+pctx.font = 'bold 48px Arial';
+pctx.fillText('196', 275, 42);
+pctx.font = 'bold 20px Arial';
+pctx.fillText('RUS', 288, 76);
+const plateTex = new THREE.CanvasTexture(plateCanvas);
+const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), new THREE.MeshStandardMaterial({ map: plateTex }));
+plate.position.set(-4.09, 0.1, 0);
+plate.rotation.y = -Math.PI / 2;
+chassis.add(plate);
+
+// --- WHEELS (6 × ZIL 6×6) ---
+const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 24);
+const wheelRimGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.52, 16);
+function makeWheel() {
+  const g = new THREE.Group();
+  const tire = new THREE.Mesh(wheelGeo, matDark);
+  tire.rotation.x = Math.PI / 2;
+  const rim = new THREE.Mesh(wheelRimGeo, matChrome);
+  rim.rotation.x = Math.PI / 2;
+  g.add(tire, rim);
+  return g;
+}
+// front axle
+for (const z of [-1.3, 1.3]) {
+  const w = makeWheel();
+  w.position.set(-2.4, 0, z);
+  truck.add(w);
+}
+// rear tandem
+for (const x of [1.5, 2.8]) {
+  for (const z of [-1.3, 1.3]) {
+    const w = makeWheel();
+    w.position.set(x, 0, z);
+    truck.add(w);
+  }
+}
+
+// --- Rear bed/platform ---
+const bed = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.3, 2.3), matYellowDark);
+bed.position.set(1.5, 1.0, 0);
+truck.add(bed);
+
+// Yellow-black warning stripes on bed sides
+for (let i = 0; i < 9; i++) {
+  const s = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.02),
+    i % 2 === 0 ? new THREE.MeshStandardMaterial({ color: 0x1a1a1a }) : matYellow);
+  s.position.set(-0.6 + i * 0.5, 1.0, 1.17);
+  truck.add(s);
+  const s2 = s.clone();
+  s2.position.z = -1.17;
+  truck.add(s2);
+}
+
+// --- OUTRIGGERS (4 опоры) ---
+const outriggers = [];
+const outrigPositions = [
+  { x: 0.5, z: 1.2, dir: 1 },
+  { x: 0.5, z: -1.2, dir: -1 },
+  { x: 2.5, z: 1.2, dir: 1 },
+  { x: 2.5, z: -1.2, dir: -1 },
+];
+for (const op of outrigPositions) {
+  const g = new THREE.Group();
+  g.position.set(op.x, 0.9, op.z);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.9), matYellow);
+  arm.position.z = op.dir * 0.45;
+  g.add(arm);
+  // leg down
+  const legPivot = new THREE.Group();
+  legPivot.position.z = op.dir * 0.9;
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.0, 12), matYellow);
+  leg.position.y = -0.5;
+  legPivot.add(leg);
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.1, 16), matDark);
+  foot.position.y = -1.0;
+  legPivot.add(foot);
+  g.add(legPivot);
+  g.userData.legPivot = legPivot;
+  truck.add(g);
+  outriggers.push(g);
+}
+
+// --- BOOM BASE (поворотная платформа) ---
+const boomBase = new THREE.Group();
+boomBase.position.set(2.0, 1.15, 0);
+truck.add(boomBase);
+
+// turntable
+const turntable = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 0.3, 24), matYellowDark);
+boomBase.add(turntable);
+
+// vertical pivot stand (where boom hinges)
+const stand = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.4, 1.3), matYellow);
+stand.position.y = 0.85;
+boomBase.add(stand);
+
+// --- MAIN BOOM (главная стрела) ---
+const boomPivot = new THREE.Group();
+boomPivot.position.y = 0.85;
+boomBase.add(boomPivot);
+
+const boomMain = new THREE.Group();
+boomPivot.add(boomMain);
+
+// main boom segment — longer, more realistic
+const boomMainBeam = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.6, 0.8), matYellow);
+boomMainBeam.position.x = 3.5;
+boomMain.add(boomMainBeam);
+
+// warning stripes on tip of boom
+for (let i = 0; i < 4; i++) {
+  const s = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 0.82),
+    i % 2 === 0 ? new THREE.MeshStandardMaterial({ color: 0x1a1a1a }) : matYellow);
+  s.position.set(0.2 + i * 0.4, 0.38, 0);
+  boomMain.add(s);
+}
+
+// "АГП-22" label (large, on side)
+const label = document.createElement('canvas');
+label.width = 1024; label.height = 128;
+const ctx = label.getContext('2d');
+ctx.fillStyle = '#f5c518'; ctx.fillRect(0, 0, 1024, 128);
+ctx.fillStyle = '#0a0d12';
+ctx.font = 'bold 90px Arial'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+ctx.fillText('АГП-22', 40, 70);
+ctx.font = 'bold 36px Arial';
+ctx.fillText('Г/П 300 кг', 320, 80);
+const labelTex = new THREE.CanvasTexture(label);
+const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 0.6),
+  new THREE.MeshStandardMaterial({ map: labelTex }));
+labelMesh.position.set(3.2, 0, 0.405);
+boomMain.add(labelMesh);
+
+// "НЕ СТОЙ ПОД СТРЕЛОЙ!" warning on opposite side
+const warnCanvas = document.createElement('canvas');
+warnCanvas.width = 1024; warnCanvas.height = 96;
+const wctx = warnCanvas.getContext('2d');
+wctx.fillStyle = '#f5c518'; wctx.fillRect(0, 0, 1024, 96);
+wctx.fillStyle = '#c00';
+wctx.font = 'bold 56px Arial'; wctx.textBaseline = 'middle'; wctx.textAlign = 'center';
+wctx.fillText('НЕ СТОЙ ПОД СТРЕЛОЙ!', 512, 48);
+const warnTex = new THREE.CanvasTexture(warnCanvas);
+const warnMesh = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 0.45),
+  new THREE.MeshStandardMaterial({ map: warnTex }));
+warnMesh.position.set(3.2, -0.1, -0.405);
+warnMesh.rotation.y = Math.PI;
+boomMain.add(warnMesh);
+
+// --- HYDRAULIC CYLINDER (гидроцилиндр подъёма стрелы) ---
+// Mounted between boom base and underside of main boom
+const hydraulicGroup = new THREE.Group();
+boomPivot.add(hydraulicGroup);
+// Cylinder body (outer tube)
+const hydOuter = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 2.0, 16), matYellowDark);
+hydOuter.rotation.z = Math.PI / 2;
+hydOuter.position.set(1.0, -0.5, 0);
+hydraulicGroup.add(hydOuter);
+// Piston rod (inner, shiny)
+const hydRod = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.8, 16), matChrome);
+hydRod.rotation.z = Math.PI / 2;
+hydRod.position.set(2.3, -0.3, 0);
+hydraulicGroup.add(hydRod);
+
+// --- TELESCOPE SECTION (longer, extends further) ---
+const boomTele = new THREE.Group();
+boomMain.add(boomTele);
+const teleBeam = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.45, 0.65), matYellowDark);
+teleBeam.position.x = 3.0;
+boomTele.add(teleBeam);
+// tip stripe
+const tipStripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.46, 0.67),
+  new THREE.MeshStandardMaterial({ color: 0xff2d2d }));
+tipStripe.position.set(5.8, 0, 0);
+boomTele.add(tipStripe);
+
+// --- BASKET (люлька) at end of telescope ---
+const basketPivot = new THREE.Group();
+boomTele.add(basketPivot);
+basketPivot.position.x = 6.0;
+
+const basket = new THREE.Group();
+basketPivot.add(basket);
+
+// basket floor
+const basketFloor = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 1.0), matYellow);
+basketFloor.position.set(0.6, 0, 0);
+basket.add(basketFloor);
+// basket rails
+for (const x of [0, 1.2]) {
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 1.0), matYellow);
+  bar.position.set(x, 0.5, 0);
+  basket.add(bar);
+}
+for (const z of [-0.5, 0.5]) {
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 0.05), matYellow);
+  bar.position.set(0.6, 0.5, z);
+  basket.add(bar);
+}
+// top rail
+const topRail = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 1.05), matYellowDark);
+topRail.position.set(0.6, 1.0, 0);
+basket.add(topRail);
+
+// warning beacon on basket
+const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), matWarning);
+beacon.position.set(0.6, 1.15, 0);
+basket.add(beacon);
+const beaconLight = new THREE.PointLight(0xff2d2d, 1.5, 8);
+beaconLight.position.copy(beacon.position);
+basket.add(beaconLight);
+
+// --- LIGHTS ---
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(8, 15, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -15; sun.shadow.camera.right = 15;
+sun.shadow.camera.top = 15; sun.shadow.camera.bottom = -15;
+scene.add(sun);
+const rim = new THREE.DirectionalLight(0xfbbf24, 0.6);
+rim.position.set(-10, 5, -5);
+scene.add(rim);
+const fill = new THREE.DirectionalLight(0x3b82f6, 0.3);
+fill.position.set(5, 2, -8);
+scene.add(fill);
+
+// Enable shadows on truck meshes
+truck.traverse(obj => { if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; } });
+
+// --- PARTICLES (atmosphere) ---
+const pCount = 500;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(pCount * 3);
+for (let i = 0; i < pCount; i++) {
+  pPos[i*3]   = (Math.random() - 0.5) * 60;
+  pPos[i*3+1] = Math.random() * 25;
+  pPos[i*3+2] = (Math.random() - 0.5) * 60;
+}
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const pMat = new THREE.PointsMaterial({ color: 0xfbbf24, size: 0.08, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+/* ------------- POST FX ------------- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.6, 0.3);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ------------- SCROLL CHAPTERS ------------- */
+// For each chapter: camera position/target + rig state (boom angle, telescope extension, hood, outriggers, turntable rotation)
+const chapters = [
+  { // 0: hero, side view
+    camPos: new THREE.Vector3(9, 3.5, 10),
+    camTarget: new THREE.Vector3(0, 2, 0),
+    boomAngle: 0.05,
+    teleExtend: 0,
+    turntable: 0,
+    hoodOpen: 0,
+    outrigDrop: 0,
+  },
+  { // 1: cab close-up, slight angle
+    camPos: new THREE.Vector3(-6, 2.5, 4.5),
+    camTarget: new THREE.Vector3(-2.4, 1.6, 0),
+    boomAngle: 0.05,
+    teleExtend: 0,
+    turntable: 0,
+    hoodOpen: 0.6,
+    outrigDrop: 0,
+  },
+  { // 2: outriggers deployed, behind view
+    camPos: new THREE.Vector3(1.5, 2.0, 7),
+    camTarget: new THREE.Vector3(1.5, 1.0, 0),
+    boomAngle: 0.1,
+    teleExtend: 0,
+    turntable: 0,
+    hoodOpen: 0,
+    outrigDrop: 1,
+  },
+  { // 3: boom rising, orbit camera
+    camPos: new THREE.Vector3(-2, 6, 11),
+    camTarget: new THREE.Vector3(3, 5, 0),
+    boomAngle: 0.75,
+    teleExtend: 0.5,
+    turntable: 0.3,
+    hoodOpen: 0,
+    outrigDrop: 1,
+  },
+  { // 4: full extension, low wide angle looking up
+    camPos: new THREE.Vector3(-6, 2, 10),
+    camTarget: new THREE.Vector3(0, 10, 0),
+    boomAngle: 1.3, // ~75°
+    teleExtend: 1.0,
+    turntable: 0.6,
+    hoodOpen: 0,
+    outrigDrop: 1,
+  },
+  { // 5: wide aerial for CTA
+    camPos: new THREE.Vector3(14, 10, 14),
+    camTarget: new THREE.Vector3(2, 5, 0),
+    boomAngle: 1.0,
+    teleExtend: 0.8,
+    turntable: 1.0,
+    hoodOpen: 0,
+    outrigDrop: 1,
+  },
+];
+
+/* ------------- INTERPOLATION ------------- */
+const state = {
+  camPos: chapters[0].camPos.clone(),
+  camTarget: chapters[0].camTarget.clone(),
+  boomAngle: chapters[0].boomAngle,
+  teleExtend: chapters[0].teleExtend,
+  turntable: chapters[0].turntable,
+  hoodOpen: chapters[0].hoodOpen,
+  outrigDrop: chapters[0].outrigDrop,
+};
+
+function getProgress() {
+  const total = document.documentElement.scrollHeight - window.innerHeight;
+  return Math.max(0, Math.min(1, window.scrollY / total));
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function sampleChapters(p) {
+  const n = chapters.length - 1;
+  const t = p * n;
+  const i = Math.min(Math.floor(t), n - 1);
+  const i2 = i + 1;
+  const localT = t - i;
+  const e = easeInOutCubic(localT);
+  const a = chapters[i], b = chapters[i2];
+  return {
+    camPos: new THREE.Vector3().lerpVectors(a.camPos, b.camPos, e),
+    camTarget: new THREE.Vector3().lerpVectors(a.camTarget, b.camTarget, e),
+    boomAngle: THREE.MathUtils.lerp(a.boomAngle, b.boomAngle, e),
+    teleExtend: THREE.MathUtils.lerp(a.teleExtend, b.teleExtend, e),
+    turntable: THREE.MathUtils.lerp(a.turntable, b.turntable, e),
+    hoodOpen: THREE.MathUtils.lerp(a.hoodOpen, b.hoodOpen, e),
+    outrigDrop: THREE.MathUtils.lerp(a.outrigDrop, b.outrigDrop, e),
+  };
+}
+
+function getCurrentChapterIndex(p) {
+  const n = chapters.length - 1;
+  const i = Math.round(p * n);
+  return Math.max(0, Math.min(n, i));
+}
+
+/* ------------- RESIZE ------------- */
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  bloom.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+/* ------------- CHAPTER DOTS CLICK ------------- */
+const dots = document.querySelectorAll('.chapters-nav .dot');
+dots.forEach(d => {
+  d.addEventListener('click', () => {
+    const i = parseInt(d.dataset.i);
+    const n = chapters.length - 1;
+    const total = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({ top: (i / n) * total, behavior: 'smooth' });
+  });
+});
+
+/* ------------- LOOP ------------- */
+const clock = new THREE.Clock();
+const progressBar = document.getElementById('progress');
+const DAMP = 0.08;
+
+const camTarget = new THREE.Vector3();
+
+function tick() {
+  const delta = clock.getDelta();
+  const elapsed = clock.getElapsedTime();
+  const progress = getProgress();
+  progressBar.style.width = (progress * 100) + '%';
+
+  // Update chapter dots
+  const chapterIdx = getCurrentChapterIndex(progress);
+  dots.forEach((d, i) => d.classList.toggle('active', i === chapterIdx));
+
+  const target = sampleChapters(progress);
+
+  // Smooth lerp
+  state.camPos.lerp(target.camPos, DAMP);
+  state.camTarget.lerp(target.camTarget, DAMP);
+  state.boomAngle += (target.boomAngle - state.boomAngle) * DAMP;
+  state.teleExtend += (target.teleExtend - state.teleExtend) * DAMP;
+  state.turntable += (target.turntable - state.turntable) * DAMP;
+  state.hoodOpen += (target.hoodOpen - state.hoodOpen) * DAMP;
+  state.outrigDrop += (target.outrigDrop - state.outrigDrop) * DAMP;
+
+  // Apply to rig
+  camera.position.copy(state.camPos);
+  camera.lookAt(state.camTarget);
+
+  // Boom pivot: rotate around Z axis (local)
+  boomPivot.rotation.z = state.boomAngle;
+  // Telescope extends along +X (up to 4 units)
+  boomTele.position.x = state.teleExtend * 4.0;
+  // Hydraulic rod extends with boom angle (visual link)
+  hydRod.position.x = 2.3 + state.boomAngle * 0.8;
+  // Basket stays horizontal: compensate parent rotation
+  basketPivot.rotation.z = -state.boomAngle;
+  // Turntable yaw
+  boomBase.rotation.y = state.turntable * Math.PI * 0.6;
+  // Hood opens upward
+  hoodPivot.rotation.z = state.hoodOpen * 1.1;
+  // Outriggers drop
+  outriggers.forEach(o => {
+    o.userData.legPivot.position.y = -state.outrigDrop * 0.3;
+    o.userData.legPivot.scale.y = 1 + state.outrigDrop * 0.3;
+  });
+
+  // Idle breathing: subtle sway in boom when fully extended
+  if (!reduceMotion && state.teleExtend > 0.7) {
+    boomPivot.rotation.z += Math.sin(elapsed * 1.5) * 0.004;
+  }
+
+  // Pulse beacon
+  const pulse = (Math.sin(elapsed * 4) + 1) / 2;
+  beacon.material.emissiveIntensity = 0.4 + pulse * 1.0;
+  beaconLight.intensity = 1.0 + pulse * 2.0;
+
+  // Particles drift
+  particles.rotation.y = elapsed * 0.01;
+
+  composer.render();
+  requestAnimationFrame(tick);
+}
+tick();
+</script>
+
+</body>
+</html>
